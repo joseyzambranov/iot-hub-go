@@ -31,6 +31,8 @@ func (s *SensorDataProcessor) ProcessSensorData(ctx context.Context, data *entit
 	device, err := s.deviceRepo.GetDevice(ctx, data.DeviceID)
 	if err != nil {
 		device = entities.NewDevice(data.DeviceID, data.DeviceType)
+	} else if device.Type == "" && data.DeviceType != "" {
+		device.Type = data.DeviceType
 	}
 	
 	isQuarantined, err := s.deviceRepo.IsDeviceQuarantined(ctx, data.DeviceID)
