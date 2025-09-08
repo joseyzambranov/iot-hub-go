@@ -4,27 +4,64 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 	
 	"iot-hub-go/internal/domain/entities"
 	"iot-hub-go/internal/domain/ports"
 	"iot-hub-go/internal/domain/repositories"
+	"iot-hub-go/internal/domain/services"
 )
 
 type SensorDataProcessor struct {
 	deviceRepo       repositories.DeviceRepository
 	anomalyRepo      repositories.AnomalyRepository
 	notificationSvc  ports.NotificationService
+	rateLimiter      *services.RateLimiter
 }
 
 func NewSensorDataProcessor(deviceRepo repositories.DeviceRepository, anomalyRepo repositories.AnomalyRepository, notificationSvc ports.NotificationService) *SensorDataProcessor {
+	// Rate limiter: máximo 10 mensajes por minuto por dispositivo
+	rateLimiter := services.NewRateLimiter(10, 1*time.Minute)
+	
 	return &SensorDataProcessor{
 		deviceRepo:      deviceRepo,
 		anomalyRepo:     anomalyRepo,
 		notificationSvc: notificationSvc,
+		rateLimiter:     rateLimiter,
 	}
 }
 
 func (s *SensorDataProcessor) ProcessSensorData(ctx context.Context, data *entities.SensorData) error {
+	// Verificar rate limiting
+	if !s.rateLimiter.IsAllowed(data.DeviceID) {
+		log.Printf("🚫 RATE LIMIT EXCEDIDO para %s - Rechazando mensaje", data.DeviceID)
+		
+		// Crear anomalía por rate limiting
+		anomaly := entities.NewAnomaly(
+			data.DeviceID,
+			entities.AnomalyBehaviorPattern,
+			fmt.Sprintf("rate limit excedido: más de 10 mensajes/minuto (actual: %d)", s.rateLimiter.GetRequestCount(data.DeviceID)),
+			s.rateLimiter.GetRequestCount(data.DeviceID),
+		)
+		
+		if err := s.anomalyRepo.SaveAnomaly(ctx, anomaly); err != nil {
+			log.Printf("Error guardando anomalía de rate limit: %v", err)
+		}
+		
+		if s.notificationSvc != nil {
+			s.notificationSvc.SendAnomalyAlert(ctx, anomaly)
+		}
+		
+		// Cuarentena automática por rate limit abuse
+		reason := fmt.Sprintf("rate limit abuse: %d mensajes/minuto", s.rateLimiter.GetRequestCount(data.DeviceID))
+		s.deviceRepo.QuarantineDevice(ctx, data.DeviceID, reason)
+		if s.notificationSvc != nil {
+			s.notificationSvc.SendQuarantineAlert(ctx, data.DeviceID, reason)
+		}
+		
+		return fmt.Errorf("rate limit exceeded for device %s", data.DeviceID)
+	}
+
 	if err := data.Validate(); err != nil {
 		log.Printf("⚠️ DATO INVÁLIDO de %s: %v", data.DeviceID, err)
 		s.deviceRepo.QuarantineDevice(ctx, data.DeviceID, "datos inválidos")
