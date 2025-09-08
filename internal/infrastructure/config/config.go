@@ -10,6 +10,7 @@ import (
 type Config struct {
 	MQTT MQTTConfig
 	Security SecurityConfig
+	Notifications NotificationConfig
 }
 
 type MQTTConfig struct {
@@ -24,6 +25,14 @@ type SecurityConfig struct {
 	MaxMessagesPerMinute int
 	QuarantineDuration   time.Duration
 	AnomalyThreshold     int
+}
+
+type NotificationConfig struct {
+	SlackWebhookURL   string
+	TelegramBotToken  string
+	TelegramChatID    string
+	EnableSlack       bool
+	EnableTelegram    bool
 }
 
 func Load() (*Config, error) {
@@ -43,6 +52,13 @@ func Load() (*Config, error) {
 			MaxMessagesPerMinute: 20,
 			QuarantineDuration:   5 * time.Minute,
 			AnomalyThreshold:     3,
+		},
+		Notifications: NotificationConfig{
+			SlackWebhookURL:  os.Getenv("SLACK_WEBHOOK_URL"),
+			TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
+			TelegramChatID:   os.Getenv("TELEGRAM_CHAT_ID"),
+			EnableSlack:      os.Getenv("ENABLE_SLACK_NOTIFICATIONS") == "true",
+			EnableTelegram:   os.Getenv("ENABLE_TELEGRAM_NOTIFICATIONS") == "true",
 		},
 	}, nil
 }

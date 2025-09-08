@@ -6,16 +6,29 @@ import (
 	"time"
 
 	"iot-hub-go/internal/application/dto"
+	"iot-hub-go/internal/domain/entities"
 	"iot-hub-go/internal/domain/usecases"
 	"iot-hub-go/internal/infrastructure/repositories"
 )
+
+// Mock NotificationService for testing
+type mockNotificationService struct{}
+
+func (m *mockNotificationService) SendAnomalyAlert(ctx context.Context, anomaly *entities.Anomaly) error {
+	return nil
+}
+
+func (m *mockNotificationService) SendQuarantineAlert(ctx context.Context, deviceID, reason string) error {
+	return nil
+}
 
 func TestNewIoTService(t *testing.T) {
 	// Create real instances for testing constructor
 	deviceRepo := repositories.NewMemoryDeviceRepository()
 	anomalyRepo := repositories.NewMemoryAnomalyRepository()
+	notificationService := &mockNotificationService{}
 	
-	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo)
+	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo, notificationService)
 	rateLimiter := usecases.NewRateLimiter(deviceRepo)
 
 	service := NewIoTService(sensorProcessor, rateLimiter)
@@ -29,8 +42,9 @@ func TestIoTService_ProcessSensorData_Success(t *testing.T) {
 	// Create real instances for integration test
 	deviceRepo := repositories.NewMemoryDeviceRepository()
 	anomalyRepo := repositories.NewMemoryAnomalyRepository()
+	notificationService := &mockNotificationService{}
 	
-	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo)
+	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo, notificationService)
 	rateLimiter := usecases.NewRateLimiter(deviceRepo)
 	
 	service := NewIoTService(sensorProcessor, rateLimiter)
@@ -65,8 +79,9 @@ func TestIoTService_ProcessSensorData_Success(t *testing.T) {
 func TestIoTService_ProcessSensorData_InvalidData(t *testing.T) {
 	deviceRepo := repositories.NewMemoryDeviceRepository()
 	anomalyRepo := repositories.NewMemoryAnomalyRepository()
+	notificationService := &mockNotificationService{}
 	
-	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo)
+	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo, notificationService)
 	rateLimiter := usecases.NewRateLimiter(deviceRepo)
 	
 	service := NewIoTService(sensorProcessor, rateLimiter)
@@ -89,8 +104,9 @@ func TestIoTService_ProcessSensorData_InvalidData(t *testing.T) {
 func TestIoTService_ProcessSensorData_RateLimit(t *testing.T) {
 	deviceRepo := repositories.NewMemoryDeviceRepository()
 	anomalyRepo := repositories.NewMemoryAnomalyRepository()
+	notificationService := &mockNotificationService{}
 	
-	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo)
+	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo, notificationService)
 	rateLimiter := usecases.NewRateLimiter(deviceRepo)
 	
 	service := NewIoTService(sensorProcessor, rateLimiter)
@@ -130,8 +146,9 @@ func TestIoTService_ProcessSensorData_RateLimit(t *testing.T) {
 func TestIoTService_ProcessSensorData_AnomalyDetection(t *testing.T) {
 	deviceRepo := repositories.NewMemoryDeviceRepository()
 	anomalyRepo := repositories.NewMemoryAnomalyRepository()
+	notificationService := &mockNotificationService{}
 	
-	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo)
+	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo, notificationService)
 	rateLimiter := usecases.NewRateLimiter(deviceRepo)
 	
 	service := NewIoTService(sensorProcessor, rateLimiter)
@@ -184,8 +201,9 @@ func TestIoTService_ProcessSensorData_AnomalyDetection(t *testing.T) {
 func TestIoTService_ProcessSensorData_DTOToEntityConversion(t *testing.T) {
 	deviceRepo := repositories.NewMemoryDeviceRepository()
 	anomalyRepo := repositories.NewMemoryAnomalyRepository()
+	notificationService := &mockNotificationService{}
 	
-	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo)
+	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo, notificationService)
 	rateLimiter := usecases.NewRateLimiter(deviceRepo)
 	
 	service := NewIoTService(sensorProcessor, rateLimiter)

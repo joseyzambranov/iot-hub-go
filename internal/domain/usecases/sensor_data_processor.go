@@ -6,18 +6,21 @@ import (
 	"log"
 	
 	"iot-hub-go/internal/domain/entities"
+	"iot-hub-go/internal/domain/ports"
 	"iot-hub-go/internal/domain/repositories"
 )
 
 type SensorDataProcessor struct {
-	deviceRepo  repositories.DeviceRepository
-	anomalyRepo repositories.AnomalyRepository
+	deviceRepo       repositories.DeviceRepository
+	anomalyRepo      repositories.AnomalyRepository
+	notificationSvc  ports.NotificationService
 }
 
-func NewSensorDataProcessor(deviceRepo repositories.DeviceRepository, anomalyRepo repositories.AnomalyRepository) *SensorDataProcessor {
+func NewSensorDataProcessor(deviceRepo repositories.DeviceRepository, anomalyRepo repositories.AnomalyRepository, notificationSvc ports.NotificationService) *SensorDataProcessor {
 	return &SensorDataProcessor{
-		deviceRepo:  deviceRepo,
-		anomalyRepo: anomalyRepo,
+		deviceRepo:      deviceRepo,
+		anomalyRepo:     anomalyRepo,
+		notificationSvc: notificationSvc,
 	}
 }
 
@@ -25,6 +28,9 @@ func (s *SensorDataProcessor) ProcessSensorData(ctx context.Context, data *entit
 	if err := data.Validate(); err != nil {
 		log.Printf("⚠️ DATO INVÁLIDO de %s: %v", data.DeviceID, err)
 		s.deviceRepo.QuarantineDevice(ctx, data.DeviceID, "datos inválidos")
+		if s.notificationSvc != nil {
+			s.notificationSvc.SendQuarantineAlert(ctx, data.DeviceID, "datos inválidos")
+		}
 		return err
 	}
 	
@@ -51,6 +57,9 @@ func (s *SensorDataProcessor) ProcessSensorData(ctx context.Context, data *entit
 			log.Printf("Error guardando anomalía: %v", err)
 		}
 		log.Printf("🚨 ANOMALÍA en %s: %s", data.DeviceID, anomaly.Description)
+		if s.notificationSvc != nil {
+			s.notificationSvc.SendAnomalyAlert(ctx, anomaly)
+		}
 	}
 	
 	behaviorAnomalies := s.analyzeBehavior(ctx, device, data)
@@ -59,6 +68,9 @@ func (s *SensorDataProcessor) ProcessSensorData(ctx context.Context, data *entit
 			log.Printf("Error guardando anomalía de comportamiento: %v", err)
 		}
 		log.Printf("🚨 PATRÓN SOSPECHOSO en %s: %s", data.DeviceID, anomaly.Description)
+		if s.notificationSvc != nil {
+			s.notificationSvc.SendAnomalyAlert(ctx, anomaly)
+		}
 	}
 	
 	if len(anomalies)+len(behaviorAnomalies) == 0 {
@@ -192,7 +204,11 @@ func (s *SensorDataProcessor) analyzeBehavior(ctx context.Context, device *entit
 	
 	const ANOMALY_THRESHOLD = 3
 	if behavior.AnomalyCount >= ANOMALY_THRESHOLD {
-		s.deviceRepo.QuarantineDevice(ctx, data.DeviceID, fmt.Sprintf("múltiples anomalías detectadas (%d)", behavior.AnomalyCount))
+		reason := fmt.Sprintf("múltiples anomalías detectadas (%d)", behavior.AnomalyCount)
+		s.deviceRepo.QuarantineDevice(ctx, data.DeviceID, reason)
+		if s.notificationSvc != nil {
+			s.notificationSvc.SendQuarantineAlert(ctx, data.DeviceID, reason)
+		}
 		behavior.AnomalyCount = 0
 	}
 	

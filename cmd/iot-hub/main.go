@@ -12,6 +12,7 @@ import (
 	"iot-hub-go/internal/infrastructure/config"
 	"iot-hub-go/internal/infrastructure/logging"
 	"iot-hub-go/internal/infrastructure/mqtt"
+	"iot-hub-go/internal/infrastructure/notifications"
 	infraRepos "iot-hub-go/internal/infrastructure/repositories"
 )
 
@@ -27,7 +28,21 @@ func main() {
 	deviceRepo := infraRepos.NewMemoryDeviceRepository()
 	anomalyRepo := infraRepos.NewMemoryAnomalyRepository()
 	
-	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo)
+	notificationManager := notifications.NewNotificationManager()
+	
+	if cfg.Notifications.EnableSlack && cfg.Notifications.SlackWebhookURL != "" {
+		slackClient := notifications.NewSlackClient(cfg.Notifications.SlackWebhookURL)
+		notificationManager.AddService(slackClient)
+		logger.Info("✅ Notificaciones de Slack habilitadas")
+	}
+	
+	if cfg.Notifications.EnableTelegram && cfg.Notifications.TelegramBotToken != "" && cfg.Notifications.TelegramChatID != "" {
+		telegramClient := notifications.NewTelegramClient(cfg.Notifications.TelegramBotToken, cfg.Notifications.TelegramChatID)
+		notificationManager.AddService(telegramClient)
+		logger.Info("✅ Notificaciones de Telegram habilitadas")
+	}
+	
+	sensorProcessor := usecases.NewSensorDataProcessor(deviceRepo, anomalyRepo, notificationManager)
 	rateLimiter := usecases.NewRateLimiter(deviceRepo)
 	
 	iotService := services.NewIoTService(sensorProcessor, rateLimiter)
